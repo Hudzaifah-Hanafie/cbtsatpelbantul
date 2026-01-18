@@ -1,8 +1,6 @@
-<x-app-layout>
+<x-admin-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Kelola Soal: ' . $test->title) }}
-        </h2>
+        {{ __('Kelola Soal: ' . $test->title) }}
     </x-slot>
 
     <!-- 1. Simpan data ke Global Variable dulu agar aman dari conflict quote HTML -->
@@ -11,8 +9,8 @@
     </script>
 
     <!-- 2. Panggil data dari variable tersebut -->
-    <div class="py-12" x-data="bulkEditor(window.initialQuestionsData)">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+    <div x-data="bulkEditor(window.initialQuestionsData)">
+        <div class="max-w-7xl mx-auto">
             
             @if($errors->any())
                 <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
@@ -33,13 +31,13 @@
 
             <!-- Section Token (Form Terpisah) -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 mb-6">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-4">
                     <div>
                         <h3 class="text-lg font-bold text-gray-900">Token Akses Ujian</h3>
                         <p class="text-sm text-gray-500">Token ini digunakan peserta untuk memulai ujian.</p>
                     </div>
                     
-                    <div class="bg-gray-50 p-4 rounded border border-gray-200">
+                    <div class="bg-gray-50 p-4 rounded border border-gray-200 w-full md:w-auto">
                         <form action="{{ route('admin.tests.update_token', $test->id) }}" method="POST" class="flex items-end gap-2">
                             @csrf
                             @method('PATCH')
@@ -68,18 +66,18 @@
                     <h3 class="text-lg font-bold text-gray-900 mb-4">Informasi Dasar Ujian</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="md:col-span-2">
-                            <label for="title" class="block text-sm font-medium text-gray-700">Judul Ujian</label>
-                            <x-input type="text" name="title" id="title" value="{{ old('title', $test->title) }}" class="mt-1 block w-full" required />
+                            <label for="title" class="block text-sm font-medium text-gray-700 mb-1">Judul Ujian</label>
+                            <x-input type="text" name="title" id="title" value="{{ old('title', $test->title) }}" class="w-full" required />
                         </div>
                         
                         <div class="md:col-span-2">
-                            <label for="description" class="block text-sm font-medium text-gray-700">Deskripsi / Instruksi</label>
-                            <textarea name="description" id="description" rows="3" class="mt-1 block w-full rounded-lg shadow-sm border-gray-300 text-gray-700 focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-2 px-3 leading-tight transition duration-150 ease-in-out">{{ old('description', $test->description) }}</textarea>
+                            <label for="description" class="block text-sm font-medium text-gray-700 mb-1">Deskripsi / Instruksi</label>
+                            <textarea name="description" id="description" rows="3" class="w-full rounded-lg shadow-sm border-gray-300 text-gray-700 focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-2 px-3 leading-tight transition duration-150 ease-in-out">{{ old('description', $test->description) }}</textarea>
                         </div>
 
                         <div>
-                            <label for="duration" class="block text-sm font-medium text-gray-700">Durasi (Menit)</label>
-                            <x-input type="number" name="duration" id="duration" value="{{ old('duration', $test->duration) }}" min="1" class="mt-1 block w-full" required />
+                            <label for="duration" class="block text-sm font-medium text-gray-700 mb-1">Durasi (Menit)</label>
+                            <x-input type="number" name="duration" id="duration" value="{{ old('duration', $test->duration) }}" min="1" class="w-full" required />
                         </div>
                     </div>
                 </div>
@@ -250,4 +248,4 @@
         }
     </script>
     @endpush
-</x-app-layout>
+</x-admin-layout>

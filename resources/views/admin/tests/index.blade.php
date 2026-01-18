@@ -1,76 +1,75 @@
-<x-app-layout>
+<x-admin-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Manajemen Test dan Soal') }}
-        </h2>
+        {{ __('Manajemen Soal per Test') }}
     </x-slot>
 
     <!-- Pindahkan x-data ke wrapper utama agar mencakup seluruh konten -->
     <div x-data="{ showModal: false }">
         
         <!-- Konten Utama Halaman -->
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 bg-white border-b border-gray-200">
-                        
-                        @if(session('success'))
-                            <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-                                {{ session('success') }}
-                            </div>
-                        @endif
-
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-lg font-medium text-gray-900">Daftar Ujian</h3>
-                            <button @click="showModal = true" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow">
-                                + Tambah Test Baru
-                            </button>
+        <div class="max-w-7xl mx-auto">
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 bg-white border-b border-gray-200">
+                    
+                    @if(session('success'))
+                        <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+                            {{ session('success') }}
                         </div>
+                    @endif
 
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Judul Test</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durasi (Menit)</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Token</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jumlah Soal</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                @foreach($tests as $test)
-                                    <tr>
-                                        <td class="px-6 py-4 whitespace-nowrap">{{ $test->title }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap">{{ $test->duration }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap font-mono font-bold text-indigo-600">{{ $test->token ?? '-' }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap">{{ $test->questions_count }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <div class="flex space-x-2">
-                                                <a href="{{ route('admin.tests.manage', $test->id) }}" class="inline-flex items-center px-3 py-1 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:border-indigo-900 focus:ring ring-indigo-300 transition ease-in-out duration-150">
-                                                    Kelola Soal
-                                                </a>
-                                                
-                                                <form action="{{ route('admin.tests.destroy', $test->id) }}" method="POST" class="inline-block">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="inline-flex items-center px-3 py-1 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700 active:bg-red-900 focus:outline-none focus:border-red-900 focus:ring ring-red-300 transition ease-in-out duration-150" 
-                                                            onclick="return confirm('Apakah Anda yakin ingin menghapus ujian ini? Seluruh soal dan hasil ujian peserta terkait akan ikut terhapus.')">
-                                                        Hapus
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-medium text-gray-900">Daftar Ujian</h3>
+                        <button @click="showModal = true" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow">
+                            + Tambah Test Baru
+                        </button>
                     </div>
+
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Judul Test</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durasi (Menit)</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Token</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jumlah Soal</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            @foreach($tests as $test)
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap">{{ $test->title }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">{{ $test->duration }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap font-mono font-bold text-indigo-600">{{ $test->token ?? '-' }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">{{ $test->questions_count }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <div class="flex space-x-2">
+                                            <a href="{{ route('admin.tests.manage', $test->id) }}" class="inline-flex items-center px-3 py-1 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:border-indigo-900 focus:ring ring-indigo-300 transition ease-in-out duration-150">
+                                                Kelola Soal
+                                            </a>
+                                            
+                                            <form action="{{ route('admin.tests.destroy', $test->id) }}" method="POST" class="inline-block">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="inline-flex items-center px-3 py-1 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700 active:bg-red-900 focus:outline-none focus:border-red-900 focus:ring ring-red-300 transition ease-in-out duration-150" 
+                                                        onclick="return confirm('Apakah Anda yakin ingin menghapus ujian ini? Seluruh soal dan hasil ujian peserta terkait akan ikut terhapus.')">
+                                                    Hapus
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
 
-        <!-- Modal Tambah Test -->
+        <!-- Modal Tambah Test (Sekarang di level root, sebagai sibling dari konten utama) -->
+        <!-- Menggunakan z-50 agar di atas segalanya -->
         <div x-show="showModal" style="display: none;" class="relative z-50" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            
+            <!-- Background backdrop, show/hide based on modal state. -->
             <div x-show="showModal"
                  x-transition:enter="ease-out duration-300"
                  x-transition:enter-start="opacity-0"
@@ -82,6 +81,8 @@
 
             <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
                 <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                    
+                    <!-- Modal panel, show/hide based on modal state. -->
                     <div x-show="showModal"
                          x-transition:enter="ease-out duration-300"
                          x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
@@ -132,4 +133,4 @@
         </div>
 
     </div>
-</x-app-layout>
+</x-admin-layout>
