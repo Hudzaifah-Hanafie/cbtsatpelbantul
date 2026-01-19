@@ -54,14 +54,19 @@ class AdminController extends Controller
     public function destroyTest(Test $test)
     {
         DB::transaction(function () use ($test) {
+            // 1. Hapus hasil ujian user (UserTest) terkait
             foreach ($test->userTests as $userTest) {
                 $userTest->answers()->delete();
                 $userTest->delete();
             }
+
+            // 2. Hapus soal (Questions) dan opsi (Options) terkait
             foreach ($test->questions as $question) {
                 $question->options()->delete();
                 $question->delete();
             }
+
+            // 3. Hapus data test itu sendiri
             $test->delete();
         });
 
@@ -79,11 +84,13 @@ class AdminController extends Controller
     public function updateToken(Request $request, Test $test)
     {
         if ($request->has('generate')) {
+            // Generate random 6 character token
             $token = strtoupper(Str::random(6));
         } else {
             $request->validate([
                 'token' => 'required|string|max:10',
             ]);
+            // Pastikan token yang diinput manual dijadikan UPPERCASE sebelum disimpan
             $token = strtoupper($request->token);
         }
 
@@ -96,9 +103,12 @@ class AdminController extends Controller
     {
         // 1. Validasi Gabungan (Metadata + Soal)
         $request->validate([
+            // Validasi Metadata Test
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'duration' => 'required|integer|min:1',
+
+            // Validasi Array Soal
             'questions' => 'present|array',
             'questions.*.question_text' => 'required|string',
             'questions.*.options' => 'required|array|min:2',
@@ -107,24 +117,34 @@ class AdminController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $test) {
+            // A. Update Metadata Test
             $test->update([
                 'title' => $request->title,
                 'description' => $request->description,
                 'duration' => $request->duration,
             ]);
 
+            // B. Proses Soal
             $inputQuestions = $request->input('questions', []);
+            
+            // Kumpulkan ID soal yang ada di input (untuk mengetahui mana yang harus dipertahankan)
             $submittedQuestionIds = collect($inputQuestions)
-                ->pluck('id')->filter()->toArray();
+                ->pluck('id')
+                ->filter() // Hanya ambil yang punya ID (bukan null)
+                ->toArray();
 
+            // Hapus soal di DB yang tidak ada di input (User menghapusnya di form)
             $test->questions()->whereNotIn('id', $submittedQuestionIds)->delete();
 
+            // Loop setiap soal dari input
             foreach ($inputQuestions as $qIndex => $qData) {
+                // Update atau Create Soal
                 $question = $test->questions()->updateOrCreate(
                     ['id' => $qData['id'] ?? null],
                     ['question_text' => $qData['question_text']]
                 );
 
+                // Manajemen Opsi:
                 $question->options()->delete();
 
                 foreach ($qData['options'] as $oIndex => $oData) {
@@ -137,7 +157,7 @@ class AdminController extends Controller
         });
 
         return redirect()->route('admin.tests.manage', $test->id)
-                         ->with('success', 'Data ujian berhasil diperbarui!');
+                         ->with('success', 'Data ujian (judul, deskripsi, durasi, soal) berhasil diperbarui!');
     }
 
 
@@ -179,6 +199,7 @@ class AdminController extends Controller
     // --- List Nilai ---
     public function results(Request $request)
     {
+        // Whitelist kolom yang boleh di-sort
         $sortWhitelist = [
             'user_name' => 'users.name',
             'test_title' => 'tests.title',
@@ -189,18 +210,23 @@ class AdminController extends Controller
         $sort = $request->get('sort', 'completed_at');
         $direction = $request->get('direction', 'desc');
 
+        // Validasi sort & direction
         if (!array_key_exists($sort, $sortWhitelist)) $sort = 'completed_at';
         if (!in_array($direction, ['asc', 'desc'])) $direction = 'desc';
 
-        $query = UserTest::select('user_tests.*')
+        // Eager Load 'user' dan 'test' untuk mencegah N+1 Query pada view
+        $query = UserTest::with(['user', 'test']) 
+                    ->select('user_tests.*')
                     ->join('users', 'user_tests.user_id', '=', 'users.id')
                     ->join('tests', 'user_tests.test_id', '=', 'tests.id')
                     ->whereNotNull('completed_at');
 
+        // Filter berdasarkan Test (Dropdown)
         if ($request->filled('test_id')) {
             $query->where('user_tests.test_id', $request->test_id);
         }
 
+        // Search User (Nama atau Email)
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -209,6 +235,7 @@ class AdminController extends Controller
             });
         }
 
+        // Filter berdasarkan tanggal
         if ($request->filled('start_date')) {
             $query->whereDate('user_tests.completed_at', '>=', $request->start_date);
         }
@@ -217,12 +244,18 @@ class AdminController extends Controller
             $query->whereDate('user_tests.completed_at', '<=', $request->end_date);
         }
 
+        // Apply Sorting
         $query->orderBy($sortWhitelist[$sort], $direction);
 
         $results = $query->paginate(20);
-        $tests = Test::all(); 
+        $tests = Test::all(); // Untuk dropdown filter
         
         return view('admin.results.index', compact('results', 'tests'));
+    }
+
+    public function exportResults(Request $request)
+    {
+        return Excel::download(new ResultsExport($request->start_date, $request->end_date), 'hasil_ujian.xlsx');
     }
 
     public function bulkDestroyResults(Request $request)
@@ -251,13 +284,12 @@ class AdminController extends Controller
 
         DB::beginTransaction();
         try {
-            // Ambil ID untuk dihapus (agar bisa handle relation event/logic jika ada)
-            // Atau delete langsung jika cascade sudah aman. Di sini kita loop aman.
+            // Ambil ID untuk dihapus
             $records = $query->select('user_tests.id')->get();
             $count = $records->count();
 
             if ($count > 0) {
-                // Hapus jawaban dulu (manual cascade di level app)
+                // Hapus jawaban dulu
                 $ids = $records->pluck('id')->toArray();
                 \App\Models\UserTestAnswer::whereIn('user_test_id', $ids)->delete();
                 
@@ -271,11 +303,6 @@ class AdminController extends Controller
             DB::rollBack();
             return back()->with('error', 'Gagal menghapus data: ' . $e->getMessage());
         }
-    }
-
-    public function exportResults(Request $request)
-    {
-        return Excel::download(new ResultsExport($request->start_date, $request->end_date), 'hasil_ujian.xlsx');
     }
 
     public function destroyResult(UserTest $userTest)
@@ -298,7 +325,7 @@ class AdminController extends Controller
             $query->where('role', $request->role);
         }
 
-        // Search User
+        // Search User (Nama atau Email)
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -307,7 +334,7 @@ class AdminController extends Controller
             });
         }
 
-        // Filter Tanggal (NEW)
+        // Filter Tanggal
         if ($request->filled('start_date')) {
             $query->whereDate('created_at', '>=', $request->start_date);
         }
@@ -341,22 +368,15 @@ class AdminController extends Controller
             $query->whereDate('created_at', '<=', $request->end_date);
         }
 
-        // IMPORTANT: Jangan hapus diri sendiri (Admin yg sedang login)
+        // Jangan hapus diri sendiri
         $query->where('id', '!=', Auth::id());
 
         DB::beginTransaction();
         try {
             $count = $query->count();
             
-            // Delete (Cascade DB atau Model event biasanya menangani relasi,
-            // tapi kita bisa delete via Eloquent agar event trigger)
-            // Untuk performa ribuan data, delete() builder lebih cepat, tapi relasi
-            // harus di-handle database (ON DELETE CASCADE) atau kita handle manual.
-            // Di TestController destroyTest kita manual. Mari kita manual userTests juga.
-            
             $users = $query->get();
             foreach ($users as $user) {
-                // Hapus UserTest & Answers (via relation di UserTest)
                 foreach ($user->userTests as $ut) {
                     $ut->answers()->delete();
                     $ut->delete();
