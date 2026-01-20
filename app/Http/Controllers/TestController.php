@@ -7,9 +7,17 @@ use App\Models\UserTest;
 use App\Models\UserTestAnswer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Services\ExamService;
 
 class TestController extends Controller
 {
+    protected $examService;
+
+    public function __construct(ExamService $examService)
+    {
+        $this->examService = $examService;
+    }
+
     public function index()
     {
         $tests = Test::all();
@@ -20,7 +28,6 @@ class TestController extends Controller
     {
         $user = Auth::user();
         
-        // Cek apakah user sudah pernah menyelesaikan test ini
         $userTest = UserTest::where('user_id', $user->id)
                             ->where('test_id', $test->id)
                             ->whereNotNull('completed_at')
@@ -35,7 +42,7 @@ class TestController extends Controller
     {
         $user = Auth::user();
 
-        // 1. Validasi Token (Jika test memiliki token)
+        // Validasi Token
         if ($test->token) {
             $inputToken = strtoupper($request->input('token'));
             if ($inputToken !== $test->token) {
@@ -43,19 +50,8 @@ class TestController extends Controller
             }
         }
 
-        // Check if the user has already started this test and it's not completed
-        $userTest = UserTest::where('user_id', $user->id)
-                            ->where('test_id', $test->id)
-                            ->whereNull('completed_at')
-                            ->first();
-
-        if (!$userTest) {
-            $userTest = UserTest::create([
-                'user_id' => $user->id,
-                'test_id' => $test->id,
-                'started_at' => now(),
-            ]);
-        }
+        // Use Service
+        $this->examService->startExam($user, $test);
 
         return redirect()->route('tests.showQuestion', ['test' => $test->id, 'questionNumber' => 1]);
     }
@@ -77,25 +73,21 @@ class TestController extends Controller
         $currentQuestion = $questions->get($questionNumber - 1);
         $totalQuestions = $questions->count();
 
-        // Retrieve existing answer if any
         $existingAnswer = UserTestAnswer::where('user_test_id', $userTest->id)
                                         ->where('question_id', $currentQuestion->id)
                                         ->first();
 
-        // 1. Get list of answered question IDs for the Navigation Grid
         $answeredQuestions = UserTestAnswer::where('user_test_id', $userTest->id)
                                         ->pluck('question_id')
                                         ->toArray();
 
-        // 2. Calculate remaining seconds for the Timer
         $endTime = $userTest->started_at->addMinutes($test->duration);
         $remainingSeconds = (int) now()->diffInSeconds($endTime, false);
 
-        // Pass $questions (all questions) to view for the Grid
         return view('tests.show', compact(
             'test', 
             'userTest', 
-            'questions', // Passing all questions for the grid
+            'questions', 
             'currentQuestion', 
             'questionNumber', 
             'totalQuestions', 
@@ -123,18 +115,11 @@ class TestController extends Controller
         $selectedOptionId = $request->input('question_' . $currentQuestion->id);
 
         if ($selectedOptionId) {
-            UserTestAnswer::updateOrCreate(
-                [
-                    'user_test_id' => $userTest->id,
-                    'question_id' => $currentQuestion->id,
-                ],
-                [
-                    'option_id' => $selectedOptionId,
-                ]
-            );
+            // Use Service
+            $this->examService->saveAnswer($userTest, $currentQuestion->id, $selectedOptionId);
         }
 
-        // Determine redirection
+        // Determine redirection logic (View logic stays in controller)
         if ($request->has('jump_to')) {
             $jumpTo = (int) $request->input('jump_to');
             if ($jumpTo >= 1 && $jumpTo <= $questions->count()) {
@@ -155,7 +140,6 @@ class TestController extends Controller
              return $this->submit($request, $test);
         }
 
-        // Default fall back
         return redirect()->route('tests.showQuestion', ['test' => $test->id, 'questionNumber' => $questionNumber]);
     }
 
@@ -168,28 +152,8 @@ class TestController extends Controller
                             ->whereNull('completed_at')
                             ->firstOrFail();
 
-        // Prevent resubmission
-        if ($userTest->completed_at) {
-            return redirect()->route('tests.results', $test->id);
-        }
-
-        // Calculate score based on stored answers
-        $score = 0;
-        $questions = $test->questions()->with('options')->get();
-        $userAnswers = UserTestAnswer::where('user_test_id', $userTest->id)->get()->keyBy('question_id');
-
-        foreach ($questions as $question) {
-            if (isset($userAnswers[$question->id])) {
-                $selectedOption = $question->options->find($userAnswers[$question->id]->option_id);
-                if ($selectedOption && $selectedOption->is_correct) {
-                    $score++;
-                }
-            }
-        }
-
-        $userTest->score = $score;
-        $userTest->completed_at = now();
-        $userTest->save();
+        // Use Service
+        $this->examService->submitExam($userTest);
 
         return redirect()->route('tests.results', $test->id);
     }

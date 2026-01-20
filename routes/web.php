@@ -4,6 +4,7 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TestController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\Api\LoadTestController;
 use Illuminate\Support\Facades\Auth;
 
 Route::get('/', function () {
@@ -70,7 +71,19 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/users', [AdminController::class, 'userStore'])->name('users.store');
     // BULK DELETE USERS (Harus sebelum /{id})
     Route::delete('/users/bulk-destroy', [AdminController::class, 'bulkDestroyUsers'])->name('users.bulk_destroy');
-    // Jika nanti ada delete user satuan, taruh disini
+});
+
+// --- LOAD TESTING ROUTES (API ONLY, NO CSRF) ---
+// Menggunakan middleware 'web' agar session/cookies tetap jalan (untuk Redis Session Test)
+// CSRF dimatikan via bootstrap/app.php
+Route::group(['prefix' => 'load-test', 'middleware' => ['web']], function () {
+    Route::post('/login', [LoadTestController::class, 'login']);
+    
+    Route::middleware('auth')->group(function () {
+        Route::post('/start', [LoadTestController::class, 'start']);
+        Route::post('/answer', [LoadTestController::class, 'saveAnswer']);
+        Route::post('/submit', [LoadTestController::class, 'submit']);
+    });
 });
 
 require __DIR__.'/auth.php';

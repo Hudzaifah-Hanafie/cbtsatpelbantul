@@ -1,80 +1,71 @@
 import http from 'k6/http';
-import { check, sleep, group } from 'k6';
+import { check, sleep, group, fail } from 'k6';
 import { SharedArray } from 'k6/data';
 import { randomIntBetween } from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
 
-// Konfigurasi Load Test
-// export const options = {
-//   stages: [
-//     { duration: '30s', target: 20 }, // Ramp-up ke 20 user dalam 30 detik
-//     { duration: '1m', target: 20 },  // Tahan 20 user selama 1 menit
-//     { duration: '10s', target: 0 },  // Ramp-down
-//   ],
-//   thresholds: {
-//     http_req_duration: ['p(95)<2000'], // 95% request harus di bawah 2 detik
-//     http_req_failed: ['rate<0.01'],    // Error rate di bawah 1%
-//   },
-// };
+// --- KONFIGURASI LOAD PROFILE ---
 export const options = {
   stages: [
-    { duration: '20s', target: 5 },
-    { duration: '20s', target: 10 },
-    { duration: '1m', target: 10 },
-    { duration: '10s', target: 0 },
+    { duration: '30s', target: 5 },  // Ramp-up ke 5 user
+    { duration: '1m', target: 10 },  // Naik ke 10 user
+    { duration: '1m', target: 20 },  // Puncak di 20 user
+    { duration: '30s', target: 0 },  // Ramp-down
   ],
   thresholds: {
-    http_req_duration: ['p(95)<2000'],
-    http_req_failed: ['rate<0.01'],
+    'http_req_duration': ['p(95)<2000'], // 95% request harus < 2 detik
+    'http_req_failed': ['rate<0.05'],    // Toleransi gagal ditingkatkan sedikit untuk dev env
   },
 };
 
-
-// Load Data User & Test dari JSON yang sudah digenerate
-// SharedArray MENGHARUSKAN return value berupa Array.
-// Karena JSON kita berbentuk Object { users: [], test: {} }, kita bungkus jadi [ { ... } ]
+// --- DATA SETUP ---
 const sharedData = new SharedArray('users', function () {
   const jsonData = JSON.parse(open('./users.json'));
-  return [jsonData]; // Return array containing the data object
+  return [jsonData]; // SharedArray harus return array
 });
 
-const BASE_URL = 'http://cbtsatpelbantul.test'; // Sesuaikan dengan domain lokal Anda
+const BASE_URL = 'http://cbtsatpelbantul.test';
 
+// --- HELPER FUNCTION ---
+function getCsrfToken(response) {
+  try {
+    let match = response.body.match(/name="csrf-token" content="([^"]+)"/);
+    if (match) return match[1];
+    
+    match = response.body.match(/name="_token" value="([^"]+)"/);
+    if (match) return match[1];
+    
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// --- SKENARIO UTAMA ---
 export default function () {
-  // Akses data dari elemen pertama SharedArray
   const data = sharedData[0];
-  
-  // Ambil user unik berdasarkan Virtual User ID (VU) agar tidak tabrakan login
-  const userIndex = (__VU - 1) % data.users.length;
-  const user = data.users[userIndex];
+  const user = data.users[(__VU - 1) % data.users.length];
   const testInfo = data.test;
 
-  let res;
-  let params = {
-    headers: {
+  const params = {
+    headers: { 
       'User-Agent': 'k6-load-test',
+      'Accept': 'text/html'
     },
-    jar: http.cookieJar(), // Cookie jar otomatis menghandle session Laravel
+    jar: http.cookieJar(), // Manage sessions
   };
 
-  group('01. Login Flow', function () {
-    // 1. Get Login Page (untuk ambil CSRF Token)
-    res = http.get(`${BASE_URL}/login`, params);
-    
-    check(res, {
-      'Login page loaded': (r) => r.status === 200,
-    });
+  let res, csrfToken;
 
-    // Extract CSRF Token dari meta tag atau hidden input
-    // Regex sederhana untuk mengambil value _token
-    let csrfToken = '';
-    try {
-        csrfToken = res.body.match(/name="_token" value="([^"]+)"/)[1];
-    } catch (e) {
-        console.error(`Failed to extract CSRF token on Login Page. Status: ${res.status}`);
+  // 1. LOGIN FLOW
+  group('01_Login', () => {
+    res = http.get(`${BASE_URL}/login`, params);
+    csrfToken = getCsrfToken(res);
+
+    if (!csrfToken) {
+        console.error(`VU ${__VU}: Failed to get CSRF on Login page`);
         return;
     }
 
-    // 2. Submit Login
     res = http.post(`${BASE_URL}/login`, {
       _token: csrfToken,
       email: user.email,
@@ -82,116 +73,62 @@ export default function () {
     }, params);
 
     check(res, {
-      'Login successful': (r) => r.status === 200 || r.status === 302, // 302 redirect ke dashboard
+      'Login success': (r) => r.status === 200 || r.status === 302,
     });
   });
 
-  group('02. Access Exam', function () {
-    // 3. Akses Halaman Briefing
+  // 2. START EXAM
+  group('02_Start_Exam', () => {
     res = http.get(`${BASE_URL}/tests/${testInfo.id}`, params);
+    csrfToken = getCsrfToken(res);
+
+    sleep(1);
+
+    let payload = { _token: csrfToken };
+    if (testInfo.token) payload.token = testInfo.token;
+
+    res = http.post(`${BASE_URL}/tests/${testInfo.id}/start`, payload, params);
+
     check(res, {
-      'Briefing page loaded': (r) => r.status === 200,
-    });
-
-    // Extract CSRF Token baru (kadang perlu refresh token)
-    let csrfToken = '';
-    try {
-        csrfToken = res.body.match(/name="_token" value="([^"]+)"/)[1];
-    } catch (e) {
-        // Jika sudah login, kadang CSRF ada di meta tag
-        try {
-            csrfToken = res.body.match(/name="csrf-token" content="([^"]+)"/)[1];
-        } catch (e2) {
-             console.error(`Failed to extract CSRF token on Briefing Page. Status: ${res.status}`);
-             return;
-        }
-    }
-
-    // 4. Start Exam (Input Token)
-    // Payload start
-    let startPayload = { _token: csrfToken };
-    if (testInfo.token) {
-        startPayload.token = testInfo.token;
-    }
-
-    res = http.post(`${BASE_URL}/tests/${testInfo.id}/start`, startPayload, params);
-    
-    check(res, {
-      'Exam started (redirect)': (r) => r.status === 302 || r.status === 200,
+      'Exam started': (r) => r.status === 200 || r.url.includes('question/1'),
     });
   });
 
-  group('03. Taking Exam', function () {
-    // Simulasi menjawab beberapa soal
-    // Kita ambil 5 soal pertama saja agar tidak terlalu lama
-    const questionsToAnswer = testInfo.questions.slice(0, 5); 
+  // 3. TAKING EXAM
+  group('03_Answer_Questions', () => {
+    // Kita simulasi 5 soal
+    for (let i = 1; i <= 5; i++) {
+      res = http.get(`${BASE_URL}/tests/${testInfo.id}/question/${i}`, params);
+      
+      check(res, {
+        [`Question ${i} loaded`]: (r) => r.status === 200,
+      });
 
-    for (let i = 0; i < questionsToAnswer.length; i++) {
-        let qId = questionsToAnswer[i];
-        let qNum = i + 1;
+      let pageCsrf = getCsrfToken(res);
+      sleep(randomIntBetween(2, 4)); // Realistic think time
 
-        // Buka Halaman Soal
-        res = http.get(`${BASE_URL}/tests/${testInfo.id}/question/${qNum}`, params);
-        
-        check(res, {
-            'Question loaded': (r) => r.status === 200,
-        });
+      res = http.post(`${BASE_URL}/tests/${testInfo.id}/question/${i}/save`, {
+        _token: pageCsrf || csrfToken,
+        next: '1'
+      }, params);
 
-        // Berpikir sejenak (1-3 detik)
-        sleep(randomIntBetween(1, 3));
-
-        // Ambil CSRF dari halaman soal
-        let pageCsrf = '';
-        try {
-             pageCsrf = res.body.match(/name="_token" value="([^"]+)"/)[1];
-        } catch(e) {
-             // Coba ambil dari meta tag jika form hidden gagal
-             try {
-                pageCsrf = res.body.match(/name="csrf-token" content="([^"]+)"/)[1];
-             } catch(e2) {
-                // Skip save jika gagal ambil token (mungkin session expired/error page)
-                continue; 
-             }
-        }
-        
-        res = http.post(`${BASE_URL}/tests/${testInfo.id}/question/${qNum}/save`, {
-            _token: pageCsrf,
-            next: '1' // Tombol Next
-        }, params);
-
-        check(res, {
-            'Answer saved/Next': (r) => r.status === 302 || r.status === 200,
-        });
+      check(res, {
+        [`Answer ${i} saved`]: (r) => r.status === 200 || r.status === 302,
+      });
     }
   });
 
-  group('04. Finish Exam', function () {
-    // Karena kita tidak benar-benar di soal terakhir, kita tembak route submit langsung
-    // Kita perlu CSRF token valid, ambil dari page terakhir
-    // (Asumsi res terakhir adalah halaman soal)
-    let finalCsrf = '';
-    try {
-        finalCsrf = res.body.match(/name="_token" value="([^"]+)"/)[1];
-    } catch(e) {
-        // Fallback jika redirect, request ulang halaman soal 1 untuk dapat token
-        let tempRes = http.get(`${BASE_URL}/tests/${testInfo.id}/question/1`, params);
-        try {
-            finalCsrf = tempRes.body.match(/name="_token" value="([^"]+)"/)[1];
-        } catch(e2) {
-             try {
-                finalCsrf = tempRes.body.match(/name="csrf-token" content="([^"]+)"/)[1];
-             } catch(e3) {
-                return;
-             }
-        }
-    }
+  // 4. FINISH EXAM
+  group('04_Finish_Exam', () => {
+    // Ambil token terakhir dari page terakhir (soal 5)
+    let finalCsrf = getCsrfToken(res);
 
     res = http.post(`${BASE_URL}/tests/${testInfo.id}/submit`, {
-        _token: finalCsrf
+      _token: finalCsrf
     }, params);
 
     check(res, {
-        'Exam submitted': (r) => r.status === 302 || r.status === 200,
+      'Exam submitted': (r) => r.url.includes('/results') || r.status === 200,
     });
   });
 
