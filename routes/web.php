@@ -48,13 +48,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/tests', [AdminController::class, 'storeTest'])->name('tests.store');
     Route::delete('/tests/{test}', [AdminController::class, 'destroyTest'])->name('tests.destroy'); 
     
-    // Bulk Editor Routes (NEW)
+    // Bulk Editor Routes
     Route::get('/tests/{test}/manage', [AdminController::class, 'editBulk'])->name('tests.manage');
     Route::put('/tests/{test}/manage', [AdminController::class, 'storeBulk'])->name('tests.update_bulk');
-    // Update Token Route
     Route::patch('/tests/{test}/token', [AdminController::class, 'updateToken'])->name('tests.update_token');
 
-    // Single Create (Optional/Legacy)
+    // Single Create
     Route::get('/tests/{test}/questions/create', [AdminController::class, 'createQuestion'])->name('questions.create');
     Route::post('/tests/{test}/questions', [AdminController::class, 'storeQuestion'])->name('questions.store');
     Route::delete('/questions/{question}', [AdminController::class, 'destroyQuestion'])->name('questions.destroy');
@@ -62,20 +61,17 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // List Nilai
     Route::get('/results', [AdminController::class, 'results'])->name('results.index');
     Route::get('/results/export', [AdminController::class, 'exportResults'])->name('results.export'); 
-    // BULK DELETE RESULTS (Harus sebelum /{id})
     Route::delete('/results/bulk-destroy', [AdminController::class, 'bulkDestroyResults'])->name('results.bulk_destroy');
     Route::delete('/results/{userTest}', [AdminController::class, 'destroyResult'])->name('results.destroy');
 
     // Manajemen User
     Route::get('/users', [AdminController::class, 'usersIndex'])->name('users.index');
     Route::post('/users', [AdminController::class, 'userStore'])->name('users.store');
-    // BULK DELETE USERS (Harus sebelum /{id})
     Route::delete('/users/bulk-destroy', [AdminController::class, 'bulkDestroyUsers'])->name('users.bulk_destroy');
+    Route::delete('/users/{user}', [AdminController::class, 'destroyUser'])->name('users.destroy'); // Route Delete Individu
 });
 
 // --- LOAD TESTING ROUTES (API ONLY, NO CSRF) ---
-// Menggunakan middleware 'web' agar session/cookies tetap jalan (untuk Redis Session Test)
-// CSRF dimatikan via bootstrap/app.php
 Route::group(['prefix' => 'load-test', 'middleware' => ['web']], function () {
     Route::post('/login', [LoadTestController::class, 'login']);
     

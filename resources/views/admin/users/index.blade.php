@@ -6,16 +6,16 @@
     <div class="max-w-7xl mx-auto" x-data="{ showBulkModal: false, showCreateModal: false, verificationText: '', totalRecords: {{ $users->total() }} }">
         
         <!-- List User Section -->
-        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg border border-gray-200">
             <div class="p-6 bg-white border-b border-gray-200">
                 
                 @if(session('success'))
-                    <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded text-sm">
+                    <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded text-sm shadow-sm">
                         {{ session('success') }}
                     </div>
                 @endif
                 @if(session('error'))
-                    <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded text-sm">
+                    <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded text-sm shadow-sm">
                         {{ session('error') }}
                     </div>
                 @endif
@@ -28,7 +28,7 @@
                 </div>
                 
                 <!-- Filter & Search Form -->
-                <div class="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <div class="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
                     <form method="GET" action="{{ route('admin.users.index') }}" class="flex flex-col gap-4">
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                             <div>
@@ -76,24 +76,39 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama & Email</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Terdaftar</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider text-right">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
                             @foreach($users as $user)
                                 <tr class="hover:bg-gray-50 transition-colors">
-                                    <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{{ $user->name }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-gray-600">{{ $user->email }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm font-bold text-gray-900">{{ $user->name }}</div>
+                                        <div class="text-xs text-gray-500">{{ $user->email }}</div>
+                                    </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         {{ $user->created_at->format('d M Y') }}
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $user->role === 'admin' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' }}">
                                             {{ ucfirst($user->role) }}
                                         </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        @if($user->id !== Auth::id())
+                                            <form action="{{ route('admin.users.destroy', $user->id) }}" method="POST" class="inline-block">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="text-red-600 hover:text-red-900 transition-colors font-bold" onclick="return confirm('Hapus pengguna ini? Seluruh data ujiannya juga akan terhapus.')">
+                                                    Hapus
+                                                </button>
+                                            </form>
+                                        @else
+                                            <span class="text-gray-400 italic text-xs">Anda</span>
+                                        @endif
                                     </td>
                                 </tr>
                             @endforeach
@@ -116,7 +131,7 @@
                     <div x-show="showCreateModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
                         
                         <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                            <h3 class="text-lg font-medium leading-6 text-gray-900 mb-4" id="modal-title">Tambah User Baru</h3>
+                            <h3 class="text-lg font-bold leading-6 text-gray-900 mb-4 border-b pb-2" id="modal-title">Tambah User Baru</h3>
                             
                             <form action="{{ route('admin.users.store') }}" method="POST">
                                 @csrf

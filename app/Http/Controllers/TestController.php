@@ -34,8 +34,19 @@ class TestController extends Controller
                             ->first();
                             
         $isCompleted = !is_null($userTest);
+        
+        // Pass data skor & waktu jika selesai
+        $scoreData = null;
+        if ($isCompleted) {
+            $totalQuestions = $test->questions()->count();
+            $scoreData = [
+                'score' => $userTest->score,
+                'total' => $totalQuestions,
+                'completed_at' => $userTest->completed_at
+            ];
+        }
 
-        return view('tests.briefing', compact('test', 'isCompleted'));
+        return view('tests.briefing', compact('test', 'isCompleted', 'scoreData'));
     }
 
     public function start(Request $request, Test $test)
@@ -53,7 +64,8 @@ class TestController extends Controller
         // Use Service
         $this->examService->startExam($user, $test);
 
-        return redirect()->route('tests.showQuestion', ['test' => $test->id, 'questionNumber' => 1]);
+        return redirect()->route('tests.showQuestion', ['test' => $test->id, 'questionNumber' => 1])
+                         ->with('exam_start', 'Selamat mengerjakan ujian! Waktu Anda dimulai sekarang.');
     }
 
     public function showQuestion(Test $test, $questionNumber)
@@ -155,7 +167,8 @@ class TestController extends Controller
         // Use Service
         $this->examService->submitExam($userTest);
 
-        return redirect()->route('tests.results', $test->id);
+        return redirect()->route('tests.briefing', $test->id)
+                         ->with('success', 'Ujian berhasil dikumpulkan. Terima kasih!');
     }
 
     public function results(Test $test)
