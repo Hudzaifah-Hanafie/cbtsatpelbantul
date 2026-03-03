@@ -15,6 +15,7 @@ use App\Exports\ResultsExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class AdminController extends Controller
 {
@@ -25,6 +26,7 @@ class AdminController extends Controller
     }
 
     // --- Manajemen Soal (CRUD) ---
+    // Karena soal terikat pada Test, kita lihat berdasarkan Test saja agar rapi
     public function indexTests()
     {
         $tests = Test::withCount('questions')->get();
@@ -58,6 +60,14 @@ class AdminController extends Controller
                 $userTest->delete();
             }
             foreach ($test->questions as $question) {
+                if ($question->image_path) {
+                    Storage::disk('public')->delete($question->image_path);
+                }
+                foreach ($question->options as $option) {
+                    if ($option->image_path) {
+                        Storage::disk('public')->delete($option->image_path);
+                    }
+                }
                 $question->options()->delete();
                 $question->delete();
             }
@@ -70,6 +80,7 @@ class AdminController extends Controller
     // --- BULK EDITOR ---
     public function editBulk(Test $test)
     {
+        // Load soal beserta opsinya
         $test->load(['questions.options']);
         return view('admin.tests.manage', compact('test'));
     }
@@ -92,49 +103,171 @@ class AdminController extends Controller
 
     public function storeBulk(Request $request, Test $test)
     {
+        // 1. Validasi Gabungan (Metadata + Soal)
         $request->validate([
+            // Validasi Metadata Test
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'duration' => 'required|integer|min:1',
+
+            // Validasi Array Soal
             'questions' => 'present|array',
             'questions.*.question_text' => 'required|string',
+            'questions.*.image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120', // 5MB
+            'questions.*.remove_image' => 'nullable|boolean',
             'questions.*.options' => 'required|array|min:2',
             'questions.*.options.*.option_text' => 'required|string',
+            'questions.*.options.*.image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'questions.*.options.*.remove_image' => 'nullable|boolean',
             'questions.*.correct_index' => 'required|integer', 
         ]);
 
         DB::transaction(function () use ($request, $test) {
+            // A. Update Metadata Test
             $test->update([
                 'title' => $request->title,
                 'description' => $request->description,
                 'duration' => $request->duration,
             ]);
 
+            // B. Proses Soal
             $inputQuestions = $request->input('questions', []);
+            $filesQuestions = $request->file('questions', []);
+            
             $submittedQuestionIds = collect($inputQuestions)
-                ->pluck('id')->filter()->toArray();
+                ->pluck('id')
+                ->filter()
+                ->toArray();
 
-            $test->questions()->whereNotIn('id', $submittedQuestionIds)->delete();
+            // Hapus soal di DB yang tidak ada di input
+            $questionsToDelete = $test->questions()->whereNotIn('id', $submittedQuestionIds)->get();
+            foreach ($questionsToDelete as $qDel) {
+                if ($q_path = $qDel->image_path) {
+                    Storage::disk('public')->delete($q_path);
+                }
+                foreach ($qDel->options as $oDel) {
+                    if ($o_path = $oDel->image_path) {
+                        Storage::disk('public')->delete($o_path);
+                    }
+                }
+                $qDel->delete();
+            }
 
+            // Loop setiap soal dari input
             foreach ($inputQuestions as $qIndex => $qData) {
+                $questionId = $qData['id'] ?? null;
+                $existingQuestion = $questionId ? Question::find($questionId) : null;
+                
+                $questionPayload = ['question_text' => $qData['question_text']];
+
+                // Handle Image Removal for Question
+                if (isset($qData['remove_image']) && $qData['remove_image'] == '1' && $existingQuestion) {
+                    if ($existingQuestion->image_path) {
+                        Storage::disk('public')->delete($existingQuestion->image_path);
+                        $questionPayload['image_path'] = null;
+                    }
+                }
+
+                // Handle Image Upload for Question
+                if (isset($filesQuestions[$qIndex]['image'])) {
+                    if ($existingQuestion && $existingQuestion->image_path) {
+                        Storage::disk('public')->delete($existingQuestion->image_path);
+                    }
+                    $path = $filesQuestions[$qIndex]['image']->store('images/questions', 'public');
+                    $questionPayload['image_path'] = $path;
+                }
+
                 $question = $test->questions()->updateOrCreate(
-                    ['id' => $qData['id'] ?? null],
-                    ['question_text' => $qData['question_text']]
+                    ['id' => $questionId],
+                    $questionPayload
                 );
 
+                // Manajemen Opsi:
+                // Catat image path lama sebelum delete options
+                $existingOptions = $question->options->keyBy('option_text'); // Sederhananya kita match by text atau kita simpan map
+                // Namun karena storeBulk kita pakai delete & recreate, kita harus hati-hati dengan image.
+                // Strategi: kumpulkan image path lama.
+                $oldOptionImages = $question->options->pluck('image_path', 'id')->toArray();
+                
                 $question->options()->delete();
 
                 foreach ($qData['options'] as $oIndex => $oData) {
-                    $question->options()->create([
+                    $optionPayload = [
                         'option_text' => $oData['option_text'],
                         'is_correct' => ($oIndex == $qData['correct_index']),
-                    ]);
+                    ];
+
+                    // Handle existing image preservation or removal
+                    if (isset($oData['image_path_existing'])) {
+                         $optionPayload['image_path'] = $oData['image_path_existing'];
+                         
+                         if (isset($oData['remove_image']) && $oData['remove_image'] == '1') {
+                             Storage::disk('public')->delete($oData['image_path_existing']);
+                             $optionPayload['image_path'] = null;
+                         }
+                    }
+
+                    // Handle new upload
+                    if (isset($filesQuestions[$qIndex]['options'][$oIndex]['image'])) {
+                        // Jika sebelumnya ada (dan dikirim path-nya), hapus dulu
+                        if (isset($optionPayload['image_path'])) {
+                            Storage::disk('public')->delete($optionPayload['image_path']);
+                        }
+                        $path = $filesQuestions[$qIndex]['options'][$oIndex]['image']->store('images/options', 'public');
+                        $optionPayload['image_path'] = $path;
+                    }
+
+                    $question->options()->create($optionPayload);
                 }
             }
         });
 
         return redirect()->route('admin.tests.manage', $test->id)
-                         ->with('success', 'Data ujian berhasil diperbarui!');
+                         ->with('success', 'Data ujian dan gambar berhasil diperbarui!');
+    }
+
+
+    // --- Legacy Single Create ---
+    public function createQuestion(Test $test)
+    {
+        return view('admin.questions.create', compact('test'));
+    }
+
+    public function storeQuestion(Request $request, Test $test)
+    {
+        $request->validate([
+            'question_text' => 'required|string',
+            'options' => 'required|array|min:2',
+            'options.*' => 'required|string',
+            'correct_option_index' => 'required|integer', 
+        ]);
+
+        $question = $test->questions()->create([
+            'question_text' => $request->question_text,
+        ]);
+
+        foreach ($request->options as $index => $optionText) {
+            $question->options()->create([
+                'option_text' => $optionText,
+                'is_correct' => $index == $request->correct_option_index,
+            ]);
+        }
+
+        return redirect()->route('admin.tests.index')->with('success', 'Soal berhasil ditambahkan.');
+    }
+
+    public function destroyQuestion(Question $question)
+    {
+        if ($question->image_path) {
+            Storage::disk('public')->delete($question->image_path);
+        }
+        foreach ($question->options as $option) {
+            if ($option->image_path) {
+                Storage::disk('public')->delete($option->image_path);
+            }
+        }
+        $question->delete();
+        return back()->with('success', 'Soal dihapus.');
     }
 
     // --- List Nilai ---
@@ -279,7 +412,6 @@ class AdminController extends Controller
         }
 
         DB::transaction(function () use ($user) {
-            // Hapus hasil ujian dan jawaban peserta terlebih dahulu
             foreach ($user->userTests as $ut) {
                 $ut->answers()->delete();
                 $ut->delete();

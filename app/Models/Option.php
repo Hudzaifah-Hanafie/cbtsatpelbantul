@@ -13,6 +13,7 @@ class Option extends Model
         'question_id',
         'option_text',
         'is_correct',
+        'image_path',
     ];
 
     public function question()

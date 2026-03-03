@@ -12,6 +12,7 @@ class Question extends Model
     protected $fillable = [
         'test_id',
         'question_text',
+        'image_path',
     ];
 
     public function test()
