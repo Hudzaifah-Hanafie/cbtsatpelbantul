@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Test: ' . $test->title) }}
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight text-center md:text-left">
+            {{ __('Ujian: ' . $test->title) }}
         </h2>
     </x-slot>
 
@@ -11,10 +11,10 @@
                 
                 <!-- Area Utama Soal -->
                 <div class="flex-1">
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg border border-gray-200">
                         <div class="p-6 text-gray-900">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="text-lg font-medium text-gray-900">Question {{ $questionNumber }} of {{ $totalQuestions }}</h3>
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 class="text-lg font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-lg">PERTANYAAN {{ $questionNumber }} dari {{ $totalQuestions }}</h3>
                             </div>
 
                             <form id="test-form" action="{{ route('tests.saveAnswer', ['test' => $test->id, 'questionNumber' => $questionNumber]) }}" method="POST">
@@ -22,38 +22,65 @@
                                 <input type="hidden" name="jump_to" id="jump_to_input">
                                 <input type="hidden" name="finish" id="finish_input" value="0">
                                 
-                                <div>
-                                    <p class="text-md text-gray-800 mb-4">{{ $currentQuestion->question_text }}</p>
-                                    <div class="flex flex-col mt-4 space-y-2">
-                                        @foreach($currentQuestion->options as $option)
-                                            <label class="flex items-center cursor-pointer p-3 border rounded-lg hover:bg-blue-50 transition">
-                                                <input type="radio" name="question_{{ $currentQuestion->id }}" value="{{ $option->id }}" class="form-radio"
-                                                {{ (isset($existingAnswer) && $existingAnswer->option_id == $option->id) ? 'checked' : '' }}>
-                                                <span class="ml-2 text-gray-700">{{ $option->option_text }}</span>
+                                <div class="space-y-6">
+                                    <!-- Render Gambar Soal -->
+                                    @if($currentQuestion->image_path)
+                                        <div class="mb-4">
+                                            <img src="{{ asset('storage/' . $currentQuestion->image_path) }}" alt="Gambar Soal" class="max-w-full h-auto rounded-xl shadow-sm border border-gray-100 mx-auto">
+                                        </div>
+                                    @endif
+
+                                    <p class="text-lg text-gray-800 font-medium leading-relaxed">{{ $currentQuestion->question_text }}</p>
+                                    
+                                    <div class="flex flex-col mt-6 space-y-3">
+                                        @foreach($currentQuestion->options as $index => $option)
+                                            <label class="flex items-start cursor-pointer p-4 border-2 rounded-xl hover:border-indigo-300 hover:bg-indigo-50 transition-all duration-200 group {{ (isset($existingAnswer) && $existingAnswer->option_id == $option->id) ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100' }}">
+                                                <div class="flex items-center h-5 pt-1">
+                                                    <input type="radio" name="question_{{ $currentQuestion->id }}" value="{{ $option->id }}" class="w-5 h-5 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                                    {{ (isset($existingAnswer) && $existingAnswer->option_id == $option->id) ? 'checked' : '' }}>
+                                                </div>
+                                                <div class="ml-4 flex-1">
+                                                    <!-- Render Gambar Opsi -->
+                                                    @if($option->image_path)
+                                                        <div class="mb-3">
+                                                            <img src="{{ asset('storage/' . $option->image_path) }}" alt="Gambar Opsi" class="max-h-48 rounded-lg shadow-sm border border-gray-200">
+                                                        </div>
+                                                    @endif
+                                                    <span class="text-gray-700 font-semibold text-md group-hover:text-indigo-900 transition-colors">
+                                                        {{ chr(65 + $index) }}. {{ $option->option_text }}
+                                                    </span>
+                                                </div>
                                             </label>
                                         @endforeach
                                     </div>
                                 </div>
 
-                                <div class="mt-6 flex justify-between">
-                                    @if ($questionNumber > 1)
-                                        <button type="submit" name="previous" value="1" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                            Previous
-                                        </button>
-                                    @else
-                                        <span></span> {{-- Placeholder to maintain space --}}
-                                    @endif
+                                <div class="mt-10 pt-6 border-t border-gray-100 flex flex-col md:flex-row justify-between gap-4">
+                                    <div class="flex gap-3">
+                                        @if ($questionNumber > 1)
+                                            <button type="submit" name="previous" value="1" class="w-full md:w-auto inline-flex items-center justify-center px-6 py-2 border border-gray-300 text-sm font-bold rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                                                </svg>
+                                                SEBELUMNYA
+                                            </button>
+                                        @endif
+                                    </div>
 
-                                    @if ($questionNumber < $totalQuestions)
-                                        <button type="submit" name="next" value="1" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                            Next
-                                        </button>
-                                    @else
-                                        {{-- Tombol Finish memicu Modal --}}
-                                        <button type="button" @click="showFinishModal = true" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                                            Finish Test
-                                        </button>
-                                    @endif
+                                    <div class="flex gap-3">
+                                        @if ($questionNumber < $totalQuestions)
+                                            <button type="submit" name="next" value="1" class="w-full md:w-auto inline-flex items-center justify-center px-8 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all uppercase tracking-widest">
+                                                SELANJUTNYA
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                                </svg>
+                                            </button>
+                                        @else
+                                            <button type="button" @click="showFinishModal = true" class="w-full md:w-auto inline-flex items-center justify-center px-8 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all uppercase tracking-widest">
+                                                SELESAI & KUMPULKAN
+                                            </button>
+                                        @endif
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -63,30 +90,30 @@
                 <!-- Sidebar / Panel Kanan -->
                 <div class="w-full md:w-1/3 space-y-6">
                     
-                    <!-- 1. FITUR TIMER -->
-                    <div class="bg-white shadow sm:rounded-lg p-4 sticky top-4">
-                        <h3 class="text-lg font-medium text-gray-900 mb-2">Sisa Waktu</h3>
-                        <div id="timer-display" class="text-3xl font-bold text-center py-2 bg-gray-100 rounded text-gray-800">
-                            Loading...
+                    <!-- Timer -->
+                    <div class="bg-white shadow-sm sm:rounded-lg p-6 border border-gray-200 sticky top-4">
+                        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3">Sisa Waktu</h3>
+                        <div id="timer-display" class="text-4xl font-extrabold text-center py-4 bg-gray-50 rounded-xl text-gray-800 tabular-nums border border-gray-100">
+                            --:--
                         </div>
                     </div>
 
-                    <!-- 2. FITUR NAVIGASI PANEL SOAL -->
-                    <div class="bg-white shadow sm:rounded-lg p-4">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Navigasi Soal</h3>
-                        <div class="grid grid-cols-5 gap-2">
+                    <!-- Navigasi Panel Soal -->
+                    <div class="bg-white shadow-sm sm:rounded-lg p-6 border border-gray-200">
+                        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4">Navigasi Soal</h3>
+                        <div class="grid grid-cols-5 gap-3">
                             @foreach($questions as $index => $q)
                                 @php 
                                     $qNum = $index + 1;
-                                    // Cek apakah soal ini ada di daftar yang sudah dijawab
                                     $isAnswered = in_array($q->id, $answeredQuestions);
                                     $isCurrent = $qNum == $questionNumber;
                                 @endphp
 
                                 <button type="button" onclick="goToQuestion({{ $qNum }})"
-                                   class="flex items-center justify-center w-10 h-10 rounded text-sm font-semibold transition-colors duration-200
-                                   {{ $isCurrent ? 'ring-2 ring-indigo-500 border-indigo-500' : '' }}
-                                   {{ $isAnswered ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
+                                   class="flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold transition-all duration-200 border-2
+                                   {{ $isCurrent ? 'border-indigo-600 bg-white text-indigo-600 shadow-md ring-2 ring-indigo-100' : '' }}
+                                   {{ !$isCurrent && $isAnswered ? 'bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700' : '' }}
+                                   {{ !$isCurrent && !$isAnswered ? 'bg-gray-50 border-gray-100 text-gray-400 hover:border-indigo-200 hover:text-indigo-400' : '' }}">
                                     {{ $qNum }}
                                 </button>
                             @endforeach
@@ -111,20 +138,20 @@
                                     </svg>
                                 </div>
                                 <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                                    <h3 class="text-lg font-medium leading-6 text-gray-900" id="modal-title">Kumpulkan Jawaban?</h3>
+                                    <h3 class="text-lg font-bold leading-6 text-gray-900 uppercase tracking-tight" id="modal-title">Selesai Mengerjakan?</h3>
                                     <div class="mt-2">
-                                        <p class="text-sm text-gray-500">
-                                            Apakah Anda yakin ingin menyelesaikan ujian ini? Pastikan Anda sudah menjawab semua soal. Setelah dikumpulkan, Anda tidak dapat mengubah jawaban lagi.
+                                        <p class="text-sm text-gray-500 leading-relaxed">
+                                            Apakah Anda yakin ingin mengumpulkan jawaban sekarang? Anda tidak akan bisa mengubah jawaban lagi setelah ini.
                                         </p>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
-                            <button type="button" onclick="submitFinish()" class="inline-flex w-full justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm">
+                            <button type="button" onclick="submitFinish()" class="inline-flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-6 py-2 text-base font-bold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm uppercase tracking-widest">
                                 Ya, Kumpulkan
                             </button>
-                            <button type="button" @click="showFinishModal = false" class="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            <button type="button" @click="showFinishModal = false" class="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm uppercase tracking-widest">
                                 Batal
                             </button>
                         </div>
@@ -142,19 +169,13 @@
 
     @push('scripts')
         <script>
-            /**
-             * Submit Finish Logic
-             */
             function submitFinish() {
                 const form = document.getElementById('test-form');
                 const finishInput = document.getElementById('finish_input');
-                finishInput.value = '1'; // Tandai sebagai finish action
+                finishInput.value = '1';
                 form.submit();
             }
 
-            /**
-             * Navigasi Grid Logic
-             */
             function goToQuestion(number) {
                 const form = document.getElementById('test-form');
                 const jumpInput = document.getElementById('jump_to_input');
@@ -162,9 +183,6 @@
                 form.submit();
             }
 
-            /**
-             * Modul Timer Ujian
-             */
             const ExamTimer = {
                 timerId: null,
                 displayElement: document.getElementById('timer-display'),
@@ -172,30 +190,22 @@
                 WARNING_THRESHOLD: 5 * 60, 
 
                 init: function(serverRemainingSeconds) {
-                    console.log("Initializing Timer with server seconds:", serverRemainingSeconds);
                     let remainingSeconds = serverRemainingSeconds;
-
                     try {
                         const savedEndTime = localStorage.getItem('exam_end_time');
                         const now = Math.floor(Date.now() / 1000);
-
                         if (savedEndTime) {
                             remainingSeconds = parseInt(savedEndTime) - now;
-                            
                             if (Math.abs(remainingSeconds - serverRemainingSeconds) > 30) {
-                                console.warn("Time drift detected! Resyncing with server.");
                                 remainingSeconds = serverRemainingSeconds;
                                 localStorage.setItem('exam_end_time', now + remainingSeconds);
                             }
                         } else {
-                            const targetTime = now + serverRemainingSeconds;
-                            localStorage.setItem('exam_end_time', targetTime);
+                            localStorage.setItem('exam_end_time', now + serverRemainingSeconds);
                         }
                     } catch (e) {
-                        console.error("Timer Error:", e);
                         remainingSeconds = serverRemainingSeconds;
                     }
-
                     this.tick(remainingSeconds);
                     this.timerId = setInterval(() => {
                         remainingSeconds--;
@@ -208,7 +218,6 @@
                         clearInterval(this.timerId);
                         this.displayElement.innerText = "00:00:00";
                         this.displayElement.classList.add('text-red-600');
-                        
                         if (!this.submitted) {
                             this.submitted = true;
                             alert('Waktu habis! Jawaban Anda akan dikirim otomatis.');
@@ -217,7 +226,6 @@
                         }
                         return;
                     }
-
                     if (secondsLeft <= this.WARNING_THRESHOLD) {
                         this.displayElement.classList.remove('text-gray-800');
                         this.displayElement.classList.add('text-red-600', 'animate-pulse');
@@ -227,7 +235,6 @@
                              this.displayElement.classList.add('text-gray-800');
                         }
                     }
-
                     this.displayElement.innerText = this.formatTime(secondsLeft);
                 },
 
